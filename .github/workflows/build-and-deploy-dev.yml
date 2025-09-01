@@ -1,0 +1,51 @@
+name: Build & Deploy (dev)
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "app/**"
+      - "helm/**"
+      - ".github/workflows/build-and-deploy-dev.yml"
+
+env:
+  AWS_REGION: ap-southeast-1
+  ECR_REPO: flask-app
+  CLUSTER_NAME: maxphan-eks-demo-1
+  NAMESPACE: default
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::507737351904:role/GHActions-Deployer
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & Push
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: dev-${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG ./app
+          docker push $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          echo "ECR_REGISTRY=$ECR_REGISTRY" >> $GITHUB_ENV
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.CLUSTER_NAME }}
+
+      - name: Helm upgrade
+        run: |
+          helm upgrade --install flask-app ./helm/flask-app             --namespace ${{ env.NAMESPACE }} --create-namespace             --set image.repository=${{ env.ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}             --set image.tag=${{ env.IMAGE_TAG }}             -f helm/flask-app/values-dev.yaml

@@ -1,0 +1,8 @@
+image:
+  tag: "staging-${GIT_SHA}"
+env:
+  - name: APP_ENV
+    value: "staging"
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 4

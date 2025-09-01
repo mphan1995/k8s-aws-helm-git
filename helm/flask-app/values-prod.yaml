@@ -1,0 +1,15 @@
+image:
+  tag: "prod-${GIT_SHA}"
+env:
+  - name: APP_ENV
+    value: "prod"
+autoscaling:
+  minReplicas: 3
+  maxReplicas: 6
+resources:
+  requests:
+    cpu: "200m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"

@@ -1,0 +1,79 @@
+# ---- INPUTS ----
+variable "subnet_region"       { type = string }
+variable "subnet_vpc_id"       { type = string }
+variable "subnet_cluster_name" { type = string }
+
+# Chọn 2 AZ trong region (ví dụ ap-southeast-1a/b)
+variable "az1" { type = string }
+variable "az2" { type = string }
+
+# CIDR cho 2 private subnets
+variable "private1_cidr" { type = string }
+variable "private2_cidr" { type = string }
+
+# 1 public subnet có sẵn để đặt NAT Gateway
+variable "public_subnet_for_nat" { type = string }
+
+# ---- RESOURCES ----
+resource "aws_subnet" "private1" {
+  vpc_id                  = var.subnet_vpc_id
+  cidr_block              = var.private1_cidr
+  availability_zone       = var.az1
+  map_public_ip_on_launch = false
+  tags = {
+    Name                                         = "eks-private-1"
+    "kubernetes.io/role/internal-elb"            = "1"
+    "kubernetes.io/cluster/${var.subnet_cluster_name}"  = "shared"
+  }
+}
+
+resource "aws_subnet" "private2" {
+  vpc_id                  = var.subnet_vpc_id
+  cidr_block              = var.private2_cidr
+  availability_zone       = var.az2
+  map_public_ip_on_launch = false
+  tags = {
+    Name                                         = "eks-private-2"
+    "kubernetes.io/role/internal-elb"            = "1"
+    "kubernetes.io/cluster/${var.subnet_cluster_name}"  = "shared"
+  }
+}
+
+# EIP cho NAT GW
+resource "aws_eip" "nat" {
+  domain = "vpc"
+}
+
+# NAT Gateway đặt trong 1 public subnet đang có
+resource "aws_nat_gateway" "this" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = var.public_subnet_for_nat
+  tags = { Name = "eks-nat" }
+}
+
+# Route table cho private subnets
+resource "aws_route_table" "private" {
+  vpc_id = var.subnet_vpc_id
+  tags   = { Name = "eks-private-rt" }
+}
+
+resource "aws_route" "private_to_nat" {
+  route_table_id         = aws_route_table.private.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.this.id
+}
+
+resource "aws_route_table_association" "a1" {
+  subnet_id      = aws_subnet.private1.id
+  route_table_id = aws_route_table.private.id
+}
+
+resource "aws_route_table_association" "a2" {
+  subnet_id      = aws_subnet.private2.id
+  route_table_id = aws_route_table.private.id
+}
+
+# ---- OUTPUTS ----
+output "private_subnet_ids_csv" {
+  value = "${aws_subnet.private1.id},${aws_subnet.private2.id}"
+}
