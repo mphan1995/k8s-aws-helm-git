@@ -76,7 +76,7 @@ module "eks" {
   version = "~> 20.0"
 
   cluster_name    = var.cluster_name
-  cluster_version = "1.30"
+  cluster_version = "1.32"
 
   vpc_id     = data.aws_vpc.target.id
   subnet_ids = local.effective_subnet_ids
@@ -90,5 +90,14 @@ module "eks" {
     }
   }
 
+  cluster_endpoint_public_access  = true
+  cluster_endpoint_private_access = false  #Không cần mở private IP truy cập CLUSTER
+  cluster_endpoint_public_access_cidrs = ["165.85.191.79/32"]  # ví dụ "1.2.3.4/32"
   enable_irsa = true
+}
+
+# variables.tf
+variable "admin_ip_cidr" {
+  type    = string
+  default = "165.85.191.79"
 }
